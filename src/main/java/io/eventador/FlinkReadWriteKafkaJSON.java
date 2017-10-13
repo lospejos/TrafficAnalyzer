@@ -3,17 +3,14 @@ package io.eventador;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.utils.ParameterTool;
-import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer010;
-import org.apache.flink.streaming.util.serialization.SimpleStringSchema;
-import org.apache.flink.streaming.connectors.kafka.Kafka010JsonTableSource;
-import org.apache.flink.streaming.connectors.kafka.KafkaJsonTableSource;
+import org.apache.flink.streaming.connectors.kafka.*;
+import org.apache.flink.streaming.connectors.kafka.partitioner.FlinkKafkaPartitioner;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.Types;
 import org.apache.flink.table.api.java.StreamTableEnvironment;
+
 import org.apache.flink.types.Row;
 
 public class FlinkReadWriteKafkaJSON {
@@ -51,8 +48,16 @@ public class FlinkReadWriteKafkaJSON {
             tableEnv.registerTableSource("flights", kafkaTableSource);
             Table result = tableEnv.sql(sql);
 
-            DataStream<Row> resultSet = tableEnv.toAppendStream(result, Row.class);
-            resultSet.print();
+            // create a partitioner for the data going into kafka
+            FlinkKafkaPartitioner partition =  new FlinkKafkaPartitioner();
+
+            // create new tablesink of JSON to kafka
+            KafkaJsonTableSink kafkaTableSink = new Kafka09JsonTableSink(
+                    params.getRequired("write-topic"),
+                    params.getProperties(),
+                    partition);
+
+            tableEnv.writeToSink(result, kafkaTableSink);  // fixme unsure what the f
 
             env.execute("FlinkReadWriteKafkaJSON");
         }
