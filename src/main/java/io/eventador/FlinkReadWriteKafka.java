@@ -7,6 +7,13 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer010;
 import org.apache.flink.streaming.util.serialization.SimpleStringSchema;
+import org.apache.flink.streaming.connectors.kafka.Kafka010JsonTableSource;
+import org.apache.flink.streaming.connectors.kafka.KafkaJsonTableSource;
+import org.apache.flink.table.api.Table;
+import org.apache.flink.table.api.TableEnvironment;
+import org.apache.flink.table.api.Types;
+import org.apache.flink.table.api.java.StreamTableEnvironment;
+import org.apache.flink.types.Row;
 
 public class FlinkReadWriteKafka {
     public static void main(String[] args) throws Exception {
@@ -18,6 +25,8 @@ public class FlinkReadWriteKafka {
             return;
         }
 
+
+        // setup streaming environment
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.getConfig().setRestartStrategy(RestartStrategies.fixedDelayRestart(4, 10000));
         env.enableCheckpointing(300000); // 300 seconds
@@ -29,8 +38,9 @@ public class FlinkReadWriteKafka {
                         new SimpleStringSchema(),
                         params.getProperties())).name("Read from Kafka");
 
-        // Print Kafka messages to stdout - will be visible in logs
-        messageStream.print();
+        // setup table environment
+        StreamTableEnvironment sTableEnv = TableEnvironment.getTableEnvironment(env);
+
 
         // Write JSON payload back to Kafka topic
         messageStream.addSink(new FlinkKafkaProducer010<>(
