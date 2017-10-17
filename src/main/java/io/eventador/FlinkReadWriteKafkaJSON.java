@@ -5,6 +5,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.*;
+import org.apache.flink.streaming.connectors.kafka.partitioner.FlinkFixedPartitioner;
 import org.apache.flink.streaming.connectors.kafka.partitioner.FlinkKafkaPartitioner;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.TableEnvironment;
@@ -48,8 +49,8 @@ public class FlinkReadWriteKafkaJSON {
             tableEnv.registerTableSource("flights", kafkaTableSource);
             Table result = tableEnv.sql(sql);
 
-            // create a partitioner for the data going into kafka
-            FlinkKafkaPartitioner partition =  new FlinkKafkaPartitioner();
+            // create a partition for the data going into kafka
+            FlinkFixedPartitioner partition =  new FlinkFixedPartitioner();
 
             // create new tablesink of JSON to kafka
             KafkaJsonTableSink kafkaTableSink = new Kafka09JsonTableSink(
@@ -57,7 +58,7 @@ public class FlinkReadWriteKafkaJSON {
                     params.getProperties(),
                     partition);
 
-            tableEnv.writeToSink(result, kafkaTableSink);  // fixme unsure what the f
+            result.writeToSink(kafkaTableSink);
 
             env.execute("FlinkReadWriteKafkaJSON");
         }
