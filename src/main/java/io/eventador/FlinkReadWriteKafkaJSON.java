@@ -2,16 +2,26 @@ package io.eventador;
 
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.typeutils.TupleTypeInfo;
 import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.table.sources.DefinedProctimeAttribute;
+import org.apache.flink.table.sources.StreamTableSource;
+import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.*;
 import org.apache.flink.streaming.connectors.kafka.partitioner.FlinkKafkaPartitioner;
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer010;
+import org.apache.flink.streaming.util.serialization.SerializationSchema;
+import org.apache.flink.streaming.util.serialization.JsonRowSerializationSchema;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.Types;
 import org.apache.flink.table.api.java.StreamTableEnvironment;
-
 import org.apache.flink.types.Row;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 public class FlinkReadWriteKafkaJSON {
         public static void main(String[] args) throws Exception {
@@ -38,28 +48,60 @@ public class FlinkReadWriteKafkaJSON {
             );
 
             // create a new tablesource of JSON from kafka
-            KafkaJsonTableSource kafkaTableSource = new Kafka010JsonTableSource(
+            KafkaJsonTableSource kafkaTableSource = new Kafka010JsonTableSourceWithTime(
                     params.getRequired("read-topic"),
                     params.getProperties(),
-                    typeInfo);
+                    typeInfo,
+                    "proctime");
 
             // run some SQL to filter results where a key is not null
-            String sql = "SELECT icao FROM flights WHERE icao is not null";
+            String sql = "SELECT icao, count(icao) AS pings "
+                          + "FROM flights "
+                          + "WHERE icao IS NOT null "
+                          + "GROUP BY TUMBLE(proctime, INTERVAL '5' SECOND), icao";
+
+            // register the table and apply sql to stream
             tableEnv.registerTableSource("flights", kafkaTableSource);
-            Table result = tableEnv.sql(sql);
+            Table flight_table = tableEnv.sql(sql);
 
-            // create a partitioner for the data going into kafka
-            FlinkKafkaPartitioner partition =  new FlinkKafkaPartitioner();
+            // stdout debug stream, prints raw datastream to logs
+            DataStream<Row> planeRow = tableEnv.toAppendStream(flight_table, Row.class);
+            planeRow.print();
 
-            // create new tablesink of JSON to kafka
-            KafkaJsonTableSink kafkaTableSink = new Kafka09JsonTableSink(
-                    params.getRequired("write-topic"),
-                    params.getProperties(),
-                    partition);
+            // stream for feeding tumbling window count back to Kafka
+            TupleTypeInfo<Tuple2<String, Long>> planeTupleType = new TupleTypeInfo<>(Types.STRING(), Types.LONG());
+            DataStream<Tuple2<String, Long>> planeTuple = tableEnv.toAppendStream(flight_table, planeTupleType);
 
-            tableEnv.writeToSink(result, kafkaTableSink);  // fixme unsure what the f
+            // send JSON-ified stream to Kafka
+            planeTuple.addSink(new FlinkKafkaProducer010<>(
+                        params.getRequired("write-topic"),
+                        new PlaneSchema(),
+                        params.getProperties())).name("Write Planes to Kafka");
 
             env.execute("FlinkReadWriteKafkaJSON");
         }
-}
 
+        // Simple JSONifer
+        private static class PlaneSchema implements SerializationSchema<Tuple2<String, Long>> {
+            @Override
+            public byte[] serialize(Tuple2<String, Long> tuple2) {
+                Gson payload = new Gson();
+                Airplane airplane = new Airplane();
+
+                airplane.icao = tuple2.f0.toString();
+                airplane.count = tuple2.f1.toString();
+
+                return payload.toJson(airplane).getBytes();
+            }
+        }
+
+        // Container class for data model
+        private static class Airplane {
+            private String icao;
+            private String count;
+
+            Airplane() {
+                // no arg constructor
+            }
+        }
+}
