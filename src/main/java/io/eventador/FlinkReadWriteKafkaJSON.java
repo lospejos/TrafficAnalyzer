@@ -35,7 +35,8 @@ public class FlinkReadWriteKafkaJSON {
             // specify JSON field names and types
             TypeInformation<Row> typeInfo = Types.ROW(
                     new String[] { "flight", "timestamp_verbose", "msg_type", "track", "timestamp", "altitude", "counter", "lon", "icao", "vr", "lat", "speed" },
-                    new TypeInformation<?>[] { Types.STRING(), Types.STRING(), Types.STRING(), Types.STRING(), Types.SQL_TIMESTAMP(), Types.STRING(), Types.STRING(), Types.STRING(), Types.STRING(), Types.STRING(), Types.STRING(), Types.STRING() }
+                    new TypeInformation<?>[] { Types.STRING(), Types.STRING(), Types.STRING(), Types.STRING(), Types.SQL_TIMESTAMP(), Types.STRING(), Types.STRING(),
+                            Types.STRING(), Types.STRING(), Types.STRING(), Types.STRING(), Types.STRING() }
             );
 
             // create a new tablesource of JSON from kafka
