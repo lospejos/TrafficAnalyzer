@@ -1,8 +1,5 @@
 package io.eventador;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
